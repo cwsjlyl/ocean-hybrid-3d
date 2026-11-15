@@ -1,0 +1,10 @@
+本專案使用以下免費授權素材與函式庫：
+
+1. Kenney Fish Pack 2.0 與 Kenney Pirate Kit 2.1
+   作者：Kenney (www.kenney.nl)
+   授權：CC0 1.0（https://creativecommons.org/publicdomain/zero/1.0/）
+   詳見 LICENSE-Kenney-Fish-Pack.txt、LICENSE-Kenney-Pirate-Kit.txt
+
+2. Three.js r160
+   授權：MIT License
+   https://github.com/mrdoob/three.js

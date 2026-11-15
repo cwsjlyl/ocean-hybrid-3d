@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D 海洋探索館</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+        html, body {
+            width: 100%; height: 100%; height: 100dvh;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 0%, #00a8ff, #001f3f 85%);
+            font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            touch-action: none;
+        }
+        #app { position: relative; width: 100%; height: 100%; }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .fish-label {
+            background: rgba(0, 25, 50, 0.75);
+            backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+            color: #fff; padding: 3px 10px; border-radius: 20px;
+            font-size: 12px; font-weight: 700;
+            border: 1px solid rgba(72, 219, 251, 0.6);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            pointer-events: none; white-space: nowrap;
+            margin-top: -28px;
+        }
+
+        #hud {
+            position: absolute; top: 16px; left: 16px; z-index: 20;
+            background: rgba(10, 35, 66, 0.8);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 14px 18px; border-radius: 18px; color: #fff;
+            border: 1.5px solid rgba(72, 219, 251, 0.4);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+            max-width: min(360px, calc(100vw - 32px));
+        }
+        #hud h1 { font-size: 17px; color: #48dbfb; margin-bottom: 6px; }
+        .score-box { font-size: 14px; margin-bottom: 10px; }
+        .badge { background: #ff4757; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        .mode-btn {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+            color: #fff; padding: 8px 12px; border-radius: 10px; cursor: pointer;
+            font-size: 13px; font-weight: 700;
+        }
+        .mode-btn.active { background: #00d2d3; color: #002b5b; border-color: #fff; }
+        .credit { margin-top: 8px; font-size: 11px; color: rgba(255,255,255,0.7); line-height: 1.4; }
+
+        #info-card {
+            display: none; position: absolute; bottom: 24px; left: 50%;
+            transform: translateX(-50%); width: 90%; max-width: 420px; z-index: 30;
+            background: rgba(255, 255, 255, 0.96); border-radius: 22px; padding: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.45); border: 3px solid #00d2d3;
+            text-align: center;
+        }
+        #info-title { font-size: 20px; color: #0a3d62; margin-bottom: 4px; }
+        #info-en { font-size: 15px; color: #0097e6; font-weight: 700; margin-bottom: 10px; }
+        #info-desc { font-size: 14px; color: #333; line-height: 1.5; margin-bottom: 14px; }
+        .card-actions { display: flex; justify-content: center; gap: 10px; }
+        .action-btn {
+            border: none; padding: 10px 18px; border-radius: 12px;
+            font-size: 14px; font-weight: 700; cursor: pointer;
+        }
+        .btn-speak { background: #0097e6; color: #fff; }
+        .btn-close { background: #dfe4ea; color: #2f3542; }
+
+        #hint {
+            position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+            z-index: 15; color: rgba(255,255,255,0.9); font-size: 13px;
+            background: rgba(0,20,40,0.45); padding: 6px 14px; border-radius: 999px;
+            pointer-events: none;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./vendor/three/build/three.module.js",
+            "three/addons/": "./vendor/three/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+<div id="app">
+    <div id="hud">
+        <h1>海洋探索館</h1>
+        <div class="score-box">已清理垃圾：<span id="score" class="badge">0</span></div>
+        <div class="btn-group">
+            <button class="mode-btn active" id="btn-explore" type="button">點擊探索</button>
+            <button class="mode-btn" id="btn-feed" type="button">投餵魚糧</button>
+        </div>
+        <p class="credit">拖曳旋轉鏡頭，點生物看介紹。素材：Kenney（CC0）· 引擎：Three.js（MIT）</p>
+    </div>
+    <div id="hint">拖曳轉動海底視角　｜　點一點認識海洋生物</div>
+    <div id="info-card">
+        <h2 id="info-title">生物名稱</h2>
+        <div id="info-en">English Name</div>
+        <p id="info-desc">介紹內容</p>
+        <div class="card-actions">
+            <button class="action-btn btn-speak" id="btn-speak" type="button">英文發音</button>
+            <button class="action-btn btn-close" id="btn-close" type="button">關閉</button>
+        </div>
+    </div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+
+const app = document.getElementById("app");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x003a66);
+scene.fog = new THREE.FogExp2(0x003a66, 0.016);
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 150);
+camera.position.set(0, 12, 30);
+
+let renderer;
+try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+} catch (err) {
+    const msg = document.createElement("div");
+    msg.setAttribute("role", "alert");
+    msg.style.cssText = "position:absolute;inset:auto 16px 80px;z-index:40;background:rgba(255,255,255,0.95);color:#0a3d62;padding:16px 18px;border-radius:16px;font-size:15px;line-height:1.5;text-align:center;border:2px solid #00d2d3;";
+    msg.textContent = "呢個瀏覽器開唔到 3D 畫面（需要 WebGL）。請改用 Chrome、Edge 或 iPad Safari 再開一次。";
+    app.appendChild(msg);
+    throw err;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = false;
+app.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.domElement.style.position = "absolute";
+labelRenderer.domElement.style.top = "0";
+labelRenderer.domElement.style.left = "0";
+labelRenderer.domElement.style.pointerEvents = "none";
+app.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(0, 2, 0);
+controls.maxPolarAngle = Math.PI / 2 - 0.05;
+controls.minDistance = 10;
+controls.maxDistance = 48;
+controls.enablePan = false;
+
+function resize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    camera.aspect = w / Math.max(h, 1);
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h, true);
+    labelRenderer.setSize(w, h);
+}
+resize();
+window.addEventListener("resize", resize);
+if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", resize);
+}
+
+const hemiLight = new THREE.HemisphereLight(0x88eeff, 0xd2b48c, 1.4);
+hemiLight.position.set(0, 30, 0);
+scene.add(hemiLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+dirLight.position.set(15, 35, 20);
+dirLight.castShadow = false;
+scene.add(dirLight);
+
+const sandGeo = new THREE.CylinderGeometry(45, 45, 2, 48);
+const sandMat = new THREE.MeshLambertMaterial({ color: 0xe6c280 });
+const sand = new THREE.Mesh(sandGeo, sandMat);
+sand.position.y = -1;
+scene.add(sand);
+
+function makeCausticsTexture() {
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const a = Math.sin(x * 0.12) + Math.sin(y * 0.15);
+            const b = Math.sin((x + y) * 0.09) + Math.sin((x - y) * 0.11);
+            const v = Math.pow(Math.max(0, a * 0.5 + b * 0.5), 3);
+            const i = (y * size + x) * 4;
+            const n = Math.min(255, v * 90);
+            img.data[i] = 140 + n;
+            img.data[i + 1] = 210 + n * 0.4;
+            img.data[i + 2] = 255;
+            img.data[i + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(10, 10);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+const causticsTex = makeCausticsTexture();
+const caustics = new THREE.Mesh(
+    new THREE.CircleGeometry(44, 48),
+    new THREE.MeshBasicMaterial({
+        map: causticsTex,
+        transparent: true,
+        opacity: 0.16,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    })
+);
+caustics.rotation.x = -Math.PI / 2;
+caustics.position.y = 0.05;
+scene.add(caustics);
+
+const gltfLoader = new GLTFLoader();
+function loadEnvironmentModel(url, x, z, targetSize = 4, rotY = 0) {
+    return new Promise((resolve) => {
+        gltfLoader.load(url, (gltf) => {
+            const model = gltf.scene;
+            model.rotation.y = rotY;
+            model.updateMatrixWorld(true);
+            const box0 = new THREE.Box3().setFromObject(model);
+            const size = box0.getSize(new THREE.Vector3());
+            const longest = Math.max(size.x, size.y, size.z, 0.001);
+            model.scale.multiplyScalar(targetSize / longest);
+            model.position.set(0, 0, 0);
+            model.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.set(x - center.x, -box.min.y, z - center.z);
+            model.traverse((n) => {
+                if (n.isMesh) {
+                    n.castShadow = false;
+                    n.receiveShadow = false;
+                }
+            });
+            scene.add(model);
+            resolve(model);
+        }, undefined, () => {
+            spawnProceduralCoral(x, z);
+            resolve(null);
+        });
+    });
+}
+
+function spawnProceduralCoral(x, z) {
+    const colors = [0xff6b81, 0xff9f43, 0xa29bfe, 0x2ed573, 0xfeca57];
+    const h = Math.random() * 2.2 + 1.2;
+    const mesh = new THREE.Mesh(
+        new THREE.ConeGeometry(Math.random() * 0.7 + 0.4, h, 6),
+        new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
+    );
+    mesh.position.set(x, h / 2, z);
+    scene.add(mesh);
+}
+
+loadEnvironmentModel("assets/models/shipwreck.glb", -8, -6, 14, 0.6);
+loadEnvironmentModel("assets/models/chest.glb", -3, -3, 2.2, 0.8);
+loadEnvironmentModel("assets/models/barrel.glb", -5.5, -2.2, 1.6, 0.2);
+loadEnvironmentModel("assets/models/crate.glb", -2, -7, 1.8, 1.1);
+for (const item of [
+    ["assets/models/rocks-sand-a.glb", 10, 8, 6, 0.4],
+    ["assets/models/rocks-sand-b.glb", -14, 10, 7, 1.2],
+    ["assets/models/rocks-a.glb", 16, -10, 5, 0.1],
+    ["assets/models/rocks-b.glb", 4, 16, 4.5, 2.1],
+    ["assets/models/rocks-sand-a.glb", -18, -12, 5.5, 0.7],
+    ["assets/models/rocks-sand-b.glb", 20, 4, 4.8, 1.6]
+]) {
+    loadEnvironmentModel(...item);
+}
+for (let i = 0; i < 14; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.random() * 30 + 8;
+    spawnProceduralCoral(Math.cos(angle) * radius, Math.sin(angle) * radius);
+}
+
+const textureLoader = new THREE.TextureLoader();
+function loadSmartTexture(path, fallbackEmoji) {
+    const tex = textureLoader.load(path, (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.needsUpdate = true;
+    }, undefined, () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, 256, 256);
+        ctx.font = "160px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(fallbackEmoji, 128, 138);
+        tex.image = canvas;
+        tex.needsUpdate = true;
+        tex.colorSpace = THREE.SRGBColorSpace;
+    });
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+const speciesData = [
+    {
+        id: "clownfish", name: "小丑魚", en: "Clownfish", emoji: "🐠",
+        path: "assets/sprites/clownfish.png",
+        desc: "小丑魚同海葵一齊生活。佢身上有特別嘅黏液，所以唔會被海葵刺傷。",
+        size: 2.6, speed: 0.55, count: 5
+    },
+    {
+        id: "turtle", name: "綠海龜", en: "Green Sea Turtle", emoji: "🐢",
+        path: "assets/sprites/turtle.png",
+        desc: "海龜係海洋入面嘅長壽旅行者。千祈唔好亂丟膠袋，以免佢哋誤當食物食落肚。",
+        size: 3.6, speed: 0.35, count: 3
+    },
+    {
+        id: "shark", name: "雙髻鯊", en: "Hammerhead Shark", emoji: "🦈",
+        path: "assets/sprites/shark.png",
+        desc: "獨特嘅鎚子形頭部，幫佢哋擁有好廣闊嘅立體視野。",
+        size: 4.5, speed: 0.65, count: 2
+    },
+    {
+        id: "whale", name: "藍鯨", en: "Blue Whale", emoji: "🐋",
+        path: "assets/sprites/whale.png",
+        desc: "地球上體型最大嘅動物。雖然好大，但性格溫馴，主要以磷蝦為食。",
+        size: 6.5, speed: 0.25, count: 2
+    },
+    {
+        id: "bluefish", name: "藍魚", en: "Blue Fish", emoji: "🐟",
+        path: "assets/sprites/kenney_fish_blue.png",
+        desc: "色彩鮮艷嘅熱帶魚，喜歡成群喺珊瑚同海草附近游來游去。",
+        size: 2.2, speed: 0.6, count: 4
+    },
+    {
+        id: "pinkfish", name: "粉紅魚", en: "Pink Fish", emoji: "🐟",
+        path: "assets/sprites/kenney_fish_pink.png",
+        desc: "粉紅色嘅小魚好容易吸引同學注意。觀察魚群可以學習合作同方向。",
+        size: 2.2, speed: 0.58, count: 4
+    }
+];
+
+const interactables = [];
+const creatures = [];
+const _worldPos = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
+const _prev = new THREE.Vector3();
+const shadowGeo = new THREE.CircleGeometry(0.55, 16);
+const shadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false
+});
+
+function makeBillboard(tex, size) {
+    const mat = new THREE.MeshLambertMaterial({
+        map: tex, transparent: true, depthWrite: false, alphaTest: 0.08, side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    mesh.scale.set(size, size, 1);
+    return mesh;
+}
+
+function attachBlobShadow(group, size) {
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.scale.setScalar(Math.max(0.7, size * 0.35));
+    shadow.userData.kind = "shadow";
+    group.add(shadow);
+    return shadow;
+}
+
+speciesData.forEach((spec) => {
+    const tex = loadSmartTexture(spec.path, spec.emoji);
+    for (let i = 0; i < spec.count; i++) {
+        const group = new THREE.Group();
+        const mesh = makeBillboard(tex, spec.size);
+        group.add(mesh);
+
+        const radius = Math.random() * 22 + 5;
+        const angle = Math.random() * Math.PI * 2;
+        const baseY = Math.random() * 10 + 2.5;
+        group.position.set(Math.cos(angle) * radius, baseY, Math.sin(angle) * radius);
+
+        if (i === 0) {
+            const div = document.createElement("div");
+            div.className = "fish-label";
+            div.textContent = spec.name + "（" + spec.en + "）";
+            const label = new CSS2DObject(div);
+            label.position.set(0, 0.62, 0);
+            mesh.add(label);
+        }
+
+        const shadow = attachBlobShadow(group, spec.size);
+        group.userData = {
+            type: "creature", spec, mesh, shadow,
+            angle, radius, baseY,
+            speed: spec.speed * (Math.random() * 0.3 + 0.85),
+            bobOffset: Math.random() * 10,
+            prevX: group.position.x,
+            prevZ: group.position.z
+        };
+        mesh.userData = group.userData;
+        scene.add(group);
+        creatures.push(group);
+        interactables.push(mesh);
+    }
+});
+
+const seaweedFiles = [
+    "assets/sprites/seaweed_green_a.png",
+    "assets/sprites/seaweed_green_b.png",
+    "assets/sprites/seaweed_green_c.png",
+    "assets/sprites/seaweed_pink_a.png",
+    "assets/sprites/seaweed_pink_c.png",
+    "assets/sprites/seaweed_orange_a.png",
+    "assets/sprites/seaweed_grass_a.png"
+];
+const weeds = [];
+seaweedFiles.forEach((path, idx) => {
+    const tex = loadSmartTexture(path, "🌿");
+    for (let i = 0; i < 3; i++) {
+        const size = Math.random() * 2.2 + 2.4;
+        const mesh = makeBillboard(tex, size);
+        const angle = (idx * 3 + i) * 0.7 + Math.random();
+        const radius = Math.random() * 28 + 6;
+        const group = new THREE.Group();
+        group.add(mesh);
+        group.position.set(Math.cos(angle) * radius, size * 0.45, Math.sin(angle) * radius);
+        group.userData = { mesh, sway: Math.random() * 10, size };
+        scene.add(group);
+        weeds.push(group);
+    }
+});
+
+const trashTex = loadSmartTexture("assets/sprites/trash.png", "🥤");
+const trashList = [];
+function spawnTrash() {
+    const group = new THREE.Group();
+    const mesh = makeBillboard(trashTex, 2);
+    group.add(mesh);
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * 20 + 4;
+    group.position.set(Math.cos(a) * r, Math.random() * 8 + 2, Math.sin(a) * r);
+    const shadow = attachBlobShadow(group, 2);
+    group.userData = { type: "trash", mesh, shadow, bobOffset: Math.random() * 10, baseY: group.position.y };
+    mesh.userData = group.userData;
+    scene.add(group);
+    trashList.push(group);
+    interactables.push(mesh);
+}
+for (let i = 0; i < 5; i++) spawnTrash();
+
+const foods = [];
+const foodGeo = new THREE.SphereGeometry(0.25, 8, 8);
+const foodMat = new THREE.MeshLambertMaterial({ color: 0xffbe76 });
+function dropFood(point) {
+    const f = new THREE.Mesh(foodGeo, foodMat);
+    f.position.copy(point);
+    f.position.y = Math.max(point.y + 3, 5);
+    scene.add(f);
+    foods.push(f);
+}
+
+const bubbleCount = 80;
+const bubblePositions = new Float32Array(bubbleCount * 3);
+for (let i = 0; i < bubbleCount; i++) {
+    bubblePositions[i * 3] = (Math.random() - 0.5) * 50;
+    bubblePositions[i * 3 + 1] = Math.random() * 20;
+    bubblePositions[i * 3 + 2] = (Math.random() - 0.5) * 50;
+}
+const bubbleGeo = new THREE.BufferGeometry();
+bubbleGeo.setAttribute("position", new THREE.BufferAttribute(bubblePositions, 3));
+const bubbleSystem = new THREE.Points(
+    bubbleGeo,
+    new THREE.PointsMaterial({ color: 0xffffff, size: 0.35, transparent: true, opacity: 0.45, depthWrite: false })
+);
+scene.add(bubbleSystem);
+
+let mode = "explore";
+let score = 0;
+let currentWord = "";
+let downPos = { x: 0, y: 0 };
+const hint = document.getElementById("hint");
+
+document.getElementById("btn-explore").onclick = () => {
+    mode = "explore";
+    document.getElementById("btn-explore").classList.add("active");
+    document.getElementById("btn-feed").classList.remove("active");
+    hint.textContent = "拖曳轉動海底視角　｜　點一點認識海洋生物";
+};
+document.getElementById("btn-feed").onclick = () => {
+    mode = "feed";
+    document.getElementById("btn-feed").classList.add("active");
+    document.getElementById("btn-explore").classList.remove("active");
+    hint.textContent = "點海底投餵魚糧，睇吓魚會唔會游過嚟";
+};
+document.getElementById("btn-close").onclick = () => {
+    document.getElementById("info-card").style.display = "none";
+};
+document.getElementById("btn-speak").onclick = () => speak(currentWord);
+
+function speak(text) {
+    if ("speechSynthesis" in window && text) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "en-US";
+        u.rate = 0.88;
+        window.speechSynthesis.speak(u);
+    }
+}
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+window.addEventListener("pointerdown", (e) => {
+    downPos = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener("pointerup", (e) => {
+    if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 6) return;
+    if (e.target.closest("#hud") || e.target.closest("#info-card")) return;
+
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+
+    if (mode === "feed") {
+        const target = new THREE.Vector3();
+        raycaster.ray.at(18, target);
+        dropFood(target);
+        return;
+    }
+
+    const hits = raycaster.intersectObjects(interactables, false);
+    if (hits.length > 0) {
+        const obj = hits[0].object;
+        const data = obj.userData;
+        if (data.type === "creature") {
+            const s = data.spec;
+            document.getElementById("info-title").textContent = s.name;
+            document.getElementById("info-en").textContent = s.en;
+            document.getElementById("info-desc").textContent = s.desc;
+            currentWord = s.en;
+            document.getElementById("info-card").style.display = "block";
+            speak(s.en);
+        } else if (data.type === "trash") {
+            score += 1;
+            document.getElementById("score").textContent = String(score);
+            const group = obj.parent;
+            scene.remove(group);
+            interactables.splice(interactables.indexOf(obj), 1);
+            const ti = trashList.indexOf(group);
+            if (ti >= 0) trashList.splice(ti, 1);
+            setTimeout(spawnTrash, 4000);
+        }
+    }
+});
+
+function faceCameraYaw(obj) {
+    obj.getWorldPosition(_worldPos);
+    obj.rotation.set(0, Math.atan2(camera.position.x - _worldPos.x, camera.position.z - _worldPos.z), 0);
+}
+
+function updateShadow(group, shadow, size) {
+    if (!shadow) return;
+    shadow.position.set(0, 0.04 - group.position.y, 0);
+    const fade = THREE.MathUtils.clamp(1.1 - group.position.y / 16, 0.2, 0.9);
+    shadow.scale.setScalar(Math.max(0.5, size * 0.35 * fade));
+}
+
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+
+    causticsTex.offset.x = t * 0.03;
+    causticsTex.offset.y = t * 0.02;
+
+    for (let i = foods.length - 1; i >= 0; i--) {
+        foods[i].position.y -= 0.03;
+        if (foods[i].position.y < 0.3) {
+            scene.remove(foods[i]);
+            foods.splice(i, 1);
+        }
+    }
+
+    camera.getWorldDirection(_camRight);
+    _camRight.set(camera.matrixWorld.elements[0], 0, camera.matrixWorld.elements[8]).normalize();
+
+    creatures.forEach((c) => {
+        const d = c.userData;
+        _prev.copy(c.position);
+        if (foods.length > 0) {
+            const target = foods[0];
+            const dir = target.position.clone().sub(c.position);
+            if (dir.length() < 1.2) {
+                scene.remove(target);
+                foods.shift();
+            } else {
+                dir.normalize().multiplyScalar(0.1);
+                c.position.add(dir);
+            }
+            d.angle = Math.atan2(c.position.z, c.position.x);
+            d.radius = Math.hypot(c.position.x, c.position.z);
+            d.baseY = c.position.y;
+        } else {
+            d.angle += d.speed * 0.012;
+            c.position.x = Math.cos(d.angle) * d.radius;
+            c.position.z = Math.sin(d.angle) * d.radius;
+            c.position.y = d.baseY + Math.sin(t * 2 + d.bobOffset) * 0.5;
+        }
+
+        faceCameraYaw(d.mesh);
+        const vx = c.position.x - _prev.x;
+        const vz = c.position.z - _prev.z;
+        const side = Math.sign(vx * _camRight.x + vz * _camRight.z) || 1;
+        d.mesh.scale.x = side * d.spec.size;
+        d.mesh.rotation.z = Math.sin(t * 3 + d.bobOffset) * 0.08;
+        updateShadow(c, d.shadow, d.spec.size);
+    });
+
+    trashList.forEach((g) => {
+        const d = g.userData;
+        g.position.y = d.baseY + Math.sin(t * 1.6 + d.bobOffset) * 0.35;
+        faceCameraYaw(d.mesh);
+        updateShadow(g, d.shadow, 2);
+    });
+
+    weeds.forEach((g) => {
+        faceCameraYaw(g.userData.mesh);
+        g.userData.mesh.rotation.z = Math.sin(t * 1.4 + g.userData.sway) * 0.12;
+    });
+
+    const posArr = bubbleGeo.attributes.position.array;
+    for (let i = 0; i < bubbleCount; i++) {
+        posArr[i * 3 + 1] += 0.04;
+        if (posArr[i * 3 + 1] > 22) posArr[i * 3 + 1] = 0;
+    }
+    bubbleGeo.attributes.position.needsUpdate = true;
+
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
