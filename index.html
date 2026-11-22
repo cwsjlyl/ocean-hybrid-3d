@@ -1,78 +1,725 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>3D 海洋探索館</title>
+    <meta name="description" content="專為香港小學二年級學生設計的 iPad 3D 海洋生態探索與環保問答互動教材，採用 Nintendo Switch 風格化 PBR 渲染、真實海水流體物理與粵英雙語語音朗讀。">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta property="og:title" content="3D 奇妙海洋生態館 — 香港小二互動學習版">
+    <meta property="og:description" content="探索 3D 珊瑚礁與沉船、投餵海洋生物、清理塑膠垃圾並挑戰粵語語音朗讀海洋問答！">
+    <title>🌊 3D 奇妙海洋生態館（小二 iPad 互動版）</title>
     <style>
-        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+        :root {
+            --ui-bg: rgba(10, 38, 66, 0.84);
+            --ui-card: rgba(255, 255, 255, 0.96);
+            --accent-yellow: #ffd32a;
+            --accent-orange: #ff793f;
+            --accent-cyan: #18dcff;
+            --accent-green: #2ecc71;
+            --text-dark: #102a43;
+            --safe-top: env(safe-area-inset-top, 12px);
+            --safe-bottom: env(safe-area-inset-bottom, 14px);
+            --safe-left: env(safe-area-inset-left, 14px);
+            --safe-right: env(safe-area-inset-right, 14px);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
         html, body {
-            width: 100%; height: 100%; height: 100dvh;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100dvh;
             overflow: hidden;
-            background: radial-gradient(circle at 50% 0%, #00a8ff, #001f3f 85%);
-            font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background: #06395e;
+            font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, sans-serif;
             touch-action: none;
         }
-        #app { position: relative; width: 100%; height: 100%; }
-        canvas { display: block; width: 100%; height: 100%; }
 
-        .fish-label {
-            background: rgba(0, 25, 50, 0.75);
-            backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-            color: #fff; padding: 3px 10px; border-radius: 20px;
-            font-size: 12px; font-weight: 700;
-            border: 1px solid rgba(72, 219, 251, 0.6);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            pointer-events: none; white-space: nowrap;
-            margin-top: -28px;
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
         }
 
-        #hud {
-            position: absolute; top: 16px; left: 16px; z-index: 20;
-            background: rgba(10, 35, 66, 0.8);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 14px 18px; border-radius: 18px; color: #fff;
-            border: 1.5px solid rgba(72, 219, 251, 0.4);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-            max-width: min(360px, calc(100vw - 32px));
-        }
-        #hud h1 { font-size: 17px; color: #48dbfb; margin-bottom: 6px; }
-        .score-box { font-size: 14px; margin-bottom: 10px; }
-        .badge { background: #ff4757; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
-        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-        .mode-btn {
-            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-            color: #fff; padding: 8px 12px; border-radius: 10px; cursor: pointer;
-            font-size: 13px; font-weight: 700;
-        }
-        .mode-btn.active { background: #00d2d3; color: #002b5b; border-color: #fff; }
-        .credit { margin-top: 8px; font-size: 11px; color: rgba(255,255,255,0.7); line-height: 1.4; }
-
-        #info-card {
-            display: none; position: absolute; bottom: 24px; left: 50%;
-            transform: translateX(-50%); width: 90%; max-width: 420px; z-index: 30;
-            background: rgba(255, 255, 255, 0.96); border-radius: 22px; padding: 20px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.45); border: 3px solid #00d2d3;
+        /* 載入畫面 */
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            background: radial-gradient(circle at 50% 35%, #0fbcf9 0%, #0652dd 55%, #03254c 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            transition: opacity 0.55s ease, visibility 0.55s ease;
+            padding: 24px;
             text-align: center;
         }
-        #info-title { font-size: 20px; color: #0a3d62; margin-bottom: 4px; }
-        #info-en { font-size: 15px; color: #0097e6; font-weight: 700; margin-bottom: 10px; }
-        #info-desc { font-size: 14px; color: #333; line-height: 1.5; margin-bottom: 14px; }
-        .card-actions { display: flex; justify-content: center; gap: 10px; }
-        .action-btn {
-            border: none; padding: 10px 18px; border-radius: 12px;
-            font-size: 14px; font-weight: 700; cursor: pointer;
-        }
-        .btn-speak { background: #0097e6; color: #fff; }
-        .btn-close { background: #dfe4ea; color: #2f3542; }
-
-        #hint {
-            position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
-            z-index: 15; color: rgba(255,255,255,0.9); font-size: 13px;
-            background: rgba(0,20,40,0.45); padding: 6px 14px; border-radius: 999px;
+        #loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
             pointer-events: none;
         }
+        .loader-icon {
+            font-size: 4.2rem;
+            animation: floatBob 1.8s ease-in-out infinite;
+            filter: drop-shadow(0 8px 16px rgba(0,0,0,0.28));
+        }
+        #loading-screen h1 {
+            margin: 14px 0 8px;
+            font-size: clamp(1.6rem, 3.8vw, 2.4rem);
+            letter-spacing: 1px;
+            text-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        }
+        #loading-status {
+            font-size: 1.1rem;
+            opacity: 0.92;
+            margin-bottom: 16px;
+        }
+        .progress-track {
+            width: min(320px, 78vw);
+            height: 14px;
+            background: rgba(255,255,255,0.25);
+            border-radius: 999px;
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.55);
+        }
+        #loading-bar {
+            width: 15%;
+            height: 100%;
+            background: linear-gradient(90deg, #ffd32a, #0be881);
+            border-radius: 999px;
+            transition: width 0.3s ease;
+        }
+
+        @keyframes floatBob {
+            0%, 100% { transform: translateY(0) rotate(-3deg); }
+            50% { transform: translateY(-12px) rotate(3deg); }
+        }
+
+        /* 頂部狀態列 */
+        #top-hud {
+            position: fixed;
+            top: max(12px, var(--safe-top));
+            left: max(14px, var(--safe-left));
+            right: max(14px, var(--safe-right));
+            z-index: 20;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .hud-panel {
+            pointer-events: auto;
+            background: var(--ui-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #fff;
+            border: 2px solid rgba(126, 249, 255, 0.42);
+            border-radius: 22px;
+            padding: 10px 16px;
+            box-shadow: 0 8px 24px rgba(0, 15, 36, 0.35);
+        }
+
+        .brand-title {
+            margin: 0;
+            font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+            font-weight: 800;
+            color: var(--accent-yellow);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .hint-line {
+            margin: 4px 0 0;
+            font-size: clamp(0.82rem, 1.6vw, 0.95rem);
+            color: #dff9fb;
+        }
+
+        .stats-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .stat-pill {
+            pointer-events: auto;
+            background: var(--ui-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.35);
+            color: #fff;
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 0.96rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+        }
+        .stat-pill strong {
+            color: var(--accent-yellow);
+            font-size: 1.08rem;
+        }
+
+        .mini-btn {
+            pointer-events: auto;
+            min-height: 46px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 2px solid rgba(255,255,255,0.45);
+            background: rgba(14, 58, 96, 0.88);
+            color: #fff;
+            font-size: 0.92rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform 0.14s ease, background 0.2s ease;
+        }
+        .mini-btn:active {
+            transform: scale(0.94);
+        }
+
+        /* 海洋潔淨度進度條 */
+        .eco-bar-wrap {
+            width: 78px;
+            height: 10px;
+            background: rgba(255,255,255,0.22);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        #eco-bar-fill {
+            height: 100%;
+            width: 40%;
+            background: linear-gradient(90deg, #ff9f43, #1dd1a1);
+            border-radius: 999px;
+            transition: width 0.4s ease;
+        }
+
+        /* 底部 iPad 大按鈕操作列 */
+        #bottom-dock {
+            position: fixed;
+            bottom: max(14px, var(--safe-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(8, 32, 58, 0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-radius: 999px;
+            border: 2px solid rgba(126, 249, 255, 0.38);
+            box-shadow: 0 10px 28px rgba(0, 12, 30, 0.45);
+            max-width: calc(100vw - 20px);
+            overflow-x: auto;
+        }
+
+        .dock-btn {
+            min-height: 54px;
+            padding: 10px 20px;
+            border-radius: 999px;
+            border: none;
+            background: rgba(255, 255, 255, 0.92);
+            color: var(--text-dark);
+            font-size: clamp(0.98rem, 2vw, 1.12rem);
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+            transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease;
+        }
+        .dock-btn:active {
+            transform: scale(0.93);
+        }
+        .dock-btn.active {
+            background: linear-gradient(135deg, #ffd32a 0%, #ff9f1a 100%);
+            color: #1e272e;
+            box-shadow: 0 6px 18px rgba(255, 190, 0, 0.55);
+            transform: translateY(-2px);
+        }
+        .dock-btn.quiz-highlight {
+            background: linear-gradient(135deg, #48dbfb 0%, #0abde3 100%);
+            color: #052038;
+        }
+
+        /* 浮動提示訊息 Toast */
+        #toast-banner {
+            position: fixed;
+            top: 96px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-16px);
+            z-index: 35;
+            background: rgba(255, 255, 255, 0.96);
+            color: var(--text-dark);
+            padding: 10px 22px;
+            border-radius: 999px;
+            font-size: 1.05rem;
+            font-weight: 800;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+            border: 3px solid var(--accent-cyan);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+            text-align: center;
+            max-width: 88vw;
+        }
+        #toast-banner.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* 3D 頭頂名稱標籤 */
+        .fish-label {
+            color: #fff;
+            font-weight: 800;
+            font-size: 13px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: rgba(7, 34, 61, 0.68);
+            border: 1.5px solid rgba(126, 249, 255, 0.55);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* 生物知識卡 Modal */
+        #creature-card {
+            position: fixed;
+            right: max(18px, var(--safe-right));
+            bottom: calc(max(14px, var(--safe-bottom)) + 82px);
+            width: min(390px, calc(100vw - 32px));
+            z-index: 30;
+            background: var(--ui-card);
+            color: var(--text-dark);
+            border-radius: 28px;
+            padding: 20px 22px;
+            box-shadow: 0 18px 42px rgba(0, 18, 42, 0.45);
+            border: 4px solid #48dbfb;
+            display: none;
+            animation: popIn 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #creature-card.open {
+            display: block;
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.88) translateY(14px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .card-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #card-emoji {
+            font-size: 2.6rem;
+            background: #e3f8ff;
+            width: 60px;
+            height: 60px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #card-zh {
+            margin: 0;
+            font-size: 1.45rem;
+            font-weight: 900;
+            color: #0a3d62;
+        }
+        #card-en {
+            margin: 2px 0 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #3c6382;
+        }
+        .close-circle {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: #eef4f8;
+            color: #334e68;
+            font-size: 1.3rem;
+            font-weight: 900;
+            cursor: pointer;
+        }
+        #card-desc {
+            margin: 12px 0 10px;
+            font-size: 1.05rem;
+            line-height: 1.58;
+            color: #1e374d;
+        }
+        .fact-box {
+            background: #fff9db;
+            border-left: 5px solid #fcc419;
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-size: 0.96rem;
+            line-height: 1.5;
+            color: #5c4400;
+            margin-bottom: 14px;
+        }
+        .tts-btn-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .speak-btn {
+            flex: 1;
+            min-height: 48px;
+            border: none;
+            border-radius: 16px;
+            padding: 10px 14px;
+            font-size: 1rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: transform 0.14s ease;
+        }
+        .speak-btn:active { transform: scale(0.95); }
+        .speak-btn.cantonese {
+            background: linear-gradient(135deg, #0fbcf9, #0097e6);
+            color: #fff;
+        }
+        .speak-btn.english {
+            background: linear-gradient(135deg, #0be881, #05c46b);
+            color: #073b22;
+        }
+
+        /* 通用全屏遮罩彈窗（小二海洋問答 & 海洋圖鑑） */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            background: rgba(4, 22, 42, 0.72);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+        }
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal-sheet {
+            width: min(680px, 95vw);
+            max-height: 88dvh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background: #ffffff;
+            color: var(--text-dark);
+            border-radius: 32px;
+            padding: clamp(18px, 3vw, 28px);
+            border: 5px solid #48dbfb;
+            box-shadow: 0 24px 60px rgba(0, 12, 30, 0.55);
+            animation: popIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+            touch-action: pan-y;
+        }
+
+        /* 問答介面專屬樣式 */
+        .quiz-top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .quiz-badge {
+            background: #e3fafc;
+            color: #0b7285;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-weight: 800;
+            font-size: 1rem;
+        }
+        .quiz-voice-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            background: #f1f9ff;
+            border-radius: 20px;
+            border: 2px dashed #74c0fc;
+            align-items: center;
+        }
+        .voice-action-btn {
+            min-height: 48px;
+            padding: 8px 16px;
+            border-radius: 14px;
+            border: none;
+            font-size: 0.98rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform 0.14s ease, box-shadow 0.2s ease;
+        }
+        .voice-action-btn:active { transform: scale(0.95); }
+        .voice-action-btn.primary-voice {
+            background: linear-gradient(135deg, #ff9f43, #ff6b6b);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.35);
+        }
+        .voice-action-btn.secondary-voice {
+            background: #d0ebff;
+            color: #1864ab;
+        }
+        .voice-action-btn.auto-toggle {
+            background: #ebfbee;
+            color: #2b8a3e;
+            margin-left: auto;
+        }
+        .voice-action-btn.speaking {
+            outline: 3px solid #ffd43b;
+            animation: pulseSpeak 1s infinite alternate;
+        }
+
+        @keyframes pulseSpeak {
+            from { transform: scale(1); }
+            to { transform: scale(1.03); }
+        }
+
+        #quiz-question-box {
+            background: linear-gradient(135deg, #f8fdff 0%, #e6f7ff 100%);
+            border: 2px solid #a5d8ff;
+            border-radius: 22px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        #quiz-icon {
+            font-size: 2.8rem;
+            flex-shrink: 0;
+        }
+        #quiz-question-text {
+            margin: 0;
+            font-size: clamp(1.18rem, 2.5vw, 1.42rem);
+            font-weight: 800;
+            line-height: 1.5;
+            color: #0b3c5d;
+        }
+
+        #quiz-options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .quiz-option-row {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+        }
+        .quiz-option-btn {
+            flex: 1;
+            min-height: 60px;
+            padding: 12px 18px;
+            border-radius: 18px;
+            border: 3px solid #cfe8fc;
+            background: #ffffff;
+            color: var(--text-dark);
+            font-size: clamp(1.08rem, 2.2vw, 1.24rem);
+            font-weight: 800;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.18s ease;
+        }
+        .quiz-option-btn:active {
+            transform: scale(0.98);
+        }
+        .opt-letter {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: #e7f5ff;
+            color: #1971c2;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            flex-shrink: 0;
+        }
+        .quiz-option-row.reading-highlight .quiz-option-btn {
+            border-color: #ff922b;
+            background: #fff4e6;
+            box-shadow: 0 0 0 4px rgba(255, 146, 43, 0.25);
+        }
+        .quiz-option-btn.correct {
+            border-color: #2b8a3e;
+            background: #d3f9d8;
+            color: #1b4332;
+        }
+        .quiz-option-btn.wrong {
+            border-color: #e03131;
+            background: #ffe3e3;
+            color: #7f1d1d;
+        }
+
+        .opt-speak-btn {
+            width: 60px;
+            min-height: 60px;
+            border-radius: 18px;
+            border: 2px solid #a5d8ff;
+            background: #e7f5ff;
+            color: #1864ab;
+            font-size: 1.35rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: transform 0.14s ease, background 0.2s ease;
+        }
+        .opt-speak-btn:active {
+            transform: scale(0.92);
+            background: #d0ebff;
+        }
+
+        #quiz-feedback {
+            margin-top: 16px;
+            padding: 14px 18px;
+            border-radius: 18px;
+            font-size: 1.06rem;
+            font-weight: 700;
+            line-height: 1.5;
+            display: none;
+        }
+        #quiz-feedback.show {
+            display: block;
+        }
+        #quiz-feedback.good {
+            background: #d3f9d8;
+            color: #1b4332;
+            border: 2px solid #51cf66;
+        }
+        #quiz-feedback.retry {
+            background: #fff3bf;
+            color: #664d03;
+            border: 2px solid #fcc419;
+        }
+
+        .quiz-footer {
+            margin-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .next-q-btn {
+            min-height: 52px;
+            padding: 12px 26px;
+            border-radius: 999px;
+            border: none;
+            background: linear-gradient(135deg, #0fbcf9, #05c46b);
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 900;
+            cursor: pointer;
+            margin-left: auto;
+            display: none;
+        }
+        .next-q-btn.show {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 海洋圖鑑 Grid */
+        .book-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+            gap: 14px;
+            margin-top: 16px;
+        }
+        .book-item {
+            border-radius: 22px;
+            padding: 16px;
+            border: 3px solid #d0ebff;
+            background: #f8fcff;
+            text-align: center;
+            transition: transform 0.16s ease;
+        }
+        .book-item.locked {
+            background: #f1f3f5;
+            border-color: #dee2e6;
+            color: #868e96;
+        }
+        .book-item .book-icon {
+            font-size: 2.6rem;
+            margin-bottom: 6px;
+        }
+        .book-item.locked .book-icon {
+            filter: grayscale(1) opacity(0.45);
+        }
+        .book-item h4 {
+            margin: 4px 0 2px;
+            font-size: 1.15rem;
+        }
+        .book-item p {
+            margin: 0 0 10px;
+            font-size: 0.88rem;
+            color: #495057;
+        }
+
+        @media (max-width: 720px) {
+            #top-hud {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .stats-group {
+                justify-content: space-between;
+            }
+            .hint-line {
+                display: none;
+            }
+            .dock-btn {
+                padding: 10px 14px;
+                font-size: 0.94rem;
+            }
+        }
     </style>
+
     <script type="importmap">
     {
         "imports": {
@@ -83,567 +730,131 @@
     </script>
 </head>
 <body>
-<div id="app">
-    <div id="hud">
-        <h1>海洋探索館</h1>
-        <div class="score-box">已清理垃圾：<span id="score" class="badge">0</span></div>
-        <div class="btn-group">
-            <button class="mode-btn active" id="btn-explore" type="button">點擊探索</button>
-            <button class="mode-btn" id="btn-feed" type="button">投餵魚糧</button>
-        </div>
-        <p class="credit">拖曳旋轉鏡頭，點生物看介紹。素材：Kenney（CC0）· 引擎：Three.js（MIT）</p>
-    </div>
-    <div id="hint">拖曳轉動海底視角　｜　點一點認識海洋生物</div>
-    <div id="info-card">
-        <h2 id="info-title">生物名稱</h2>
-        <div id="info-en">English Name</div>
-        <p id="info-desc">介紹內容</p>
-        <div class="card-actions">
-            <button class="action-btn btn-speak" id="btn-speak" type="button">英文發音</button>
-            <button class="action-btn btn-close" id="btn-close" type="button">關閉</button>
+    <!-- 載入畫面 -->
+    <div id="loading-screen" role="status" aria-live="polite">
+        <div class="loader-icon">🐢</div>
+        <h1>🌊 3D 奇妙海洋生態館</h1>
+        <div id="loading-status">正在啟動 Switch 級別海底光影與流體物理引擎...</div>
+        <div class="progress-track">
+            <div id="loading-bar"></div>
         </div>
     </div>
-</div>
-<script type="module">
-import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 
-const app = document.getElementById("app");
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x003a66);
-scene.fog = new THREE.FogExp2(0x003a66, 0.016);
+    <!-- 3D 畫布容器 -->
+    <div id="canvas-container" aria-label="3D 互動海洋世界"></div>
 
-const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 150);
-camera.position.set(0, 12, 30);
+    <!-- 浮動提示 -->
+    <div id="toast-banner" role="alert" aria-live="polite"></div>
 
-let renderer;
-try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
-} catch (err) {
-    const msg = document.createElement("div");
-    msg.setAttribute("role", "alert");
-    msg.style.cssText = "position:absolute;inset:auto 16px 80px;z-index:40;background:rgba(255,255,255,0.95);color:#0a3d62;padding:16px 18px;border-radius:16px;font-size:15px;line-height:1.5;text-align:center;border:2px solid #00d2d3;";
-    msg.textContent = "呢個瀏覽器開唔到 3D 畫面（需要 WebGL）。請改用 Chrome、Edge 或 iPad Safari 再開一次。";
-    app.appendChild(msg);
-    throw err;
-}
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.shadowMap.enabled = false;
-app.appendChild(renderer.domElement);
+    <!-- 頂部資訊列 -->
+    <header id="top-hud">
+        <div class="hud-panel">
+            <h1 class="brand-title">🌊 奇妙海洋生態館 <span style="font-size:0.8rem;background:#0abde3;color:#042940;padding:2px 8px;border-radius:99px;">小二互動版</span></h1>
+            <p class="hint-line">👆 單指轉動鏡頭・雙指縮放・點選海洋生物認識牠，點選漂浮膠樽清潔海洋！</p>
+        </div>
 
-const labelRenderer = new CSS2DRenderer();
-labelRenderer.domElement.style.position = "absolute";
-labelRenderer.domElement.style.top = "0";
-labelRenderer.domElement.style.left = "0";
-labelRenderer.domElement.style.pointerEvents = "none";
-app.appendChild(labelRenderer.domElement);
+        <div class="stats-group">
+            <div class="stat-pill" title="清理海洋垃圾可提升海水清澈度">
+                <span>♻️ 潔淨度</span>
+                <div class="eco-bar-wrap"><div id="eco-bar-fill"></div></div>
+                <strong id="eco-percent">40%</strong>
+            </div>
+            <div class="stat-pill">
+                <span>⭐ 環保星章</span>
+                <strong id="score-val">0</strong>
+            </div>
+            <button id="btn-reset-cam" class="mini-btn" type="button" aria-label="重置視角">🎯 重置視角</button>
+            <button id="btn-quality" class="mini-btn" type="button" aria-label="切換畫質模式">✨ Switch 高畫質</button>
+            <button id="btn-sound" class="mini-btn" type="button" aria-label="音效開關">🔊 音效開</button>
+        </div>
+    </header>
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.target.set(0, 2, 0);
-controls.maxPolarAngle = Math.PI / 2 - 0.05;
-controls.minDistance = 10;
-controls.maxDistance = 48;
-controls.enablePan = false;
+    <!-- 生物知識卡 -->
+    <aside id="creature-card" aria-live="polite">
+        <div class="card-header">
+            <div class="card-title-wrap">
+                <div id="card-emoji">🐠</div>
+                <div>
+                    <h2 id="card-zh">小丑魚</h2>
+                    <p id="card-en">Clownfish</p>
+                </div>
+            </div>
+            <button id="btn-close-card" class="close-circle" type="button" aria-label="關閉介紹卡">✕</button>
+        </div>
+        <p id="card-desc"></p>
+        <div id="card-fact" class="fact-box"></div>
+        <div class="tts-btn-row">
+            <button id="btn-speak-zh" class="speak-btn cantonese" type="button">🔊 粵語介紹</button>
+            <button id="btn-speak-en" class="speak-btn english" type="button">🔤 英文發音</button>
+        </div>
+    </aside>
 
-function resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    camera.aspect = w / Math.max(h, 1);
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h, true);
-    labelRenderer.setSize(w, h);
-}
-resize();
-window.addEventListener("resize", resize);
-if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", resize);
-}
+    <!-- 底部工具列 -->
+    <nav id="bottom-dock" aria-label="遊戲模式選單">
+        <button id="mode-explore" class="dock-btn active" type="button">🔍 探索與清潔</button>
+        <button id="mode-feed" class="dock-btn" type="button">🍞 投餵魚糧</button>
+        <button id="open-book" class="dock-btn" type="button">📖 圖鑑 (<span id="book-count">0/6</span>)</button>
+        <button id="open-quiz" class="dock-btn quiz-highlight" type="button">🎓 海洋問答挑戰</button>
+    </nav>
 
-const hemiLight = new THREE.HemisphereLight(0x88eeff, 0xd2b48c, 1.4);
-hemiLight.position.set(0, 30, 0);
-scene.add(hemiLight);
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-dirLight.position.set(15, 35, 20);
-dirLight.castShadow = false;
-scene.add(dirLight);
+    <!-- 小二海洋問答 Modal（支援每題獨立選擇朗讀問題及選項） -->
+    <div id="quiz-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="quiz-modal-title">
+        <div class="modal-sheet">
+            <div class="quiz-top-bar">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <h2 id="quiz-modal-title" style="margin:0;font-size:1.4rem;color:#0a3d62;">🎓 海洋小博士問答</h2>
+                    <span id="quiz-progress" class="quiz-badge">第 1 / 10 題</span>
+                    <span id="quiz-stars" class="quiz-badge" style="background:#fff9db;color:#b45309;">🌟 答對：0</span>
+                </div>
+                <button id="btn-close-quiz" class="close-circle" type="button" aria-label="關閉問答">✕</button>
+            </div>
 
-const sandGeo = new THREE.CylinderGeometry(45, 45, 2, 48);
-const sandMat = new THREE.MeshLambertMaterial({ color: 0xe6c280 });
-const sand = new THREE.Mesh(sandGeo, sandMat);
-sand.position.y = -1;
-scene.add(sand);
+            <!-- 每題問題及選項語音朗讀控制列 -->
+            <div class="quiz-voice-controls">
+                <button id="btn-read-all" class="voice-action-btn primary-voice" type="button">
+                    🔊 讀出題目及全部選項
+                </button>
+                <button id="btn-read-question" class="voice-action-btn secondary-voice" type="button">
+                    🗣️ 只讀題目
+                </button>
+                <button id="btn-stop-voice" class="voice-action-btn secondary-voice" type="button" style="display:none;">
+                    ⏹ 停止朗讀
+                </button>
+                <button id="btn-auto-read" class="voice-action-btn auto-toggle" type="button">
+                    🔁 自動讀題：關
+                </button>
+            </div>
 
-function makeCausticsTexture() {
-    const size = 256;
-    const canvas = document.createElement("canvas");
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    const img = ctx.createImageData(size, size);
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-            const a = Math.sin(x * 0.12) + Math.sin(y * 0.15);
-            const b = Math.sin((x + y) * 0.09) + Math.sin((x - y) * 0.11);
-            const v = Math.pow(Math.max(0, a * 0.5 + b * 0.5), 3);
-            const i = (y * size + x) * 4;
-            const n = Math.min(255, v * 90);
-            img.data[i] = 140 + n;
-            img.data[i + 1] = 210 + n * 0.4;
-            img.data[i + 2] = 255;
-            img.data[i + 3] = 255;
-        }
-    }
-    ctx.putImageData(img, 0, 0);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(10, 10);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-}
-const causticsTex = makeCausticsTexture();
-const caustics = new THREE.Mesh(
-    new THREE.CircleGeometry(44, 48),
-    new THREE.MeshBasicMaterial({
-        map: causticsTex,
-        transparent: true,
-        opacity: 0.16,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    })
-);
-caustics.rotation.x = -Math.PI / 2;
-caustics.position.y = 0.05;
-scene.add(caustics);
+            <div id="quiz-question-box">
+                <div id="quiz-icon">🐠</div>
+                <p id="quiz-question-text">問題載入中...</p>
+            </div>
 
-const gltfLoader = new GLTFLoader();
-function loadEnvironmentModel(url, x, z, targetSize = 4, rotY = 0) {
-    return new Promise((resolve) => {
-        gltfLoader.load(url, (gltf) => {
-            const model = gltf.scene;
-            model.rotation.y = rotY;
-            model.updateMatrixWorld(true);
-            const box0 = new THREE.Box3().setFromObject(model);
-            const size = box0.getSize(new THREE.Vector3());
-            const longest = Math.max(size.x, size.y, size.z, 0.001);
-            model.scale.multiplyScalar(targetSize / longest);
-            model.position.set(0, 0, 0);
-            model.updateMatrixWorld(true);
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            model.position.set(x - center.x, -box.min.y, z - center.z);
-            model.traverse((n) => {
-                if (n.isMesh) {
-                    n.castShadow = false;
-                    n.receiveShadow = false;
-                }
-            });
-            scene.add(model);
-            resolve(model);
-        }, undefined, () => {
-            spawnProceduralCoral(x, z);
-            resolve(null);
-        });
-    });
-}
+            <div id="quiz-options-list"></div>
 
-function spawnProceduralCoral(x, z) {
-    const colors = [0xff6b81, 0xff9f43, 0xa29bfe, 0x2ed573, 0xfeca57];
-    const h = Math.random() * 2.2 + 1.2;
-    const mesh = new THREE.Mesh(
-        new THREE.ConeGeometry(Math.random() * 0.7 + 0.4, h, 6),
-        new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
-    );
-    mesh.position.set(x, h / 2, z);
-    scene.add(mesh);
-}
+            <div id="quiz-feedback" role="status" aria-live="polite"></div>
 
-loadEnvironmentModel("assets/models/shipwreck.glb", -8, -6, 14, 0.6);
-loadEnvironmentModel("assets/models/chest.glb", -3, -3, 2.2, 0.8);
-loadEnvironmentModel("assets/models/barrel.glb", -5.5, -2.2, 1.6, 0.2);
-loadEnvironmentModel("assets/models/crate.glb", -2, -7, 1.8, 1.1);
-for (const item of [
-    ["assets/models/rocks-sand-a.glb", 10, 8, 6, 0.4],
-    ["assets/models/rocks-sand-b.glb", -14, 10, 7, 1.2],
-    ["assets/models/rocks-a.glb", 16, -10, 5, 0.1],
-    ["assets/models/rocks-b.glb", 4, 16, 4.5, 2.1],
-    ["assets/models/rocks-sand-a.glb", -18, -12, 5.5, 0.7],
-    ["assets/models/rocks-sand-b.glb", 20, 4, 4.8, 1.6]
-]) {
-    loadEnvironmentModel(...item);
-}
-for (let i = 0; i < 14; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const radius = Math.random() * 30 + 8;
-    spawnProceduralCoral(Math.cos(angle) * radius, Math.sin(angle) * radius);
-}
+            <div class="quiz-footer">
+                <span style="font-size:0.9rem;color:#5c7cfa;font-weight:700;">💡 小貼士：撳選項右邊嘅「🔊」可以單獨聽嗰個選項㗎！</span>
+                <button id="btn-next-question" class="next-q-btn" type="button">下一題 ➡️</button>
+            </div>
+        </div>
+    </div>
 
-const textureLoader = new THREE.TextureLoader();
-function loadSmartTexture(path, fallbackEmoji) {
-    const tex = textureLoader.load(path, (t) => {
-        t.colorSpace = THREE.SRGBColorSpace;
-        t.needsUpdate = true;
-    }, undefined, () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = canvas.height = 256;
-        const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, 256, 256);
-        ctx.font = "160px serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(fallbackEmoji, 128, 138);
-        tex.image = canvas;
-        tex.needsUpdate = true;
-        tex.colorSpace = THREE.SRGBColorSpace;
-    });
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
-}
+    <!-- 海洋生物收集圖鑑 Modal -->
+    <div id="book-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="book-modal-title">
+        <div class="modal-sheet">
+            <div class="quiz-top-bar">
+                <div>
+                    <h2 id="book-modal-title" style="margin:0;font-size:1.45rem;color:#0a3d62;">📖 我嘅海洋生物圖鑑</h2>
+                    <p style="margin:4px 0 0;font-size:0.96rem;color:#486581;">喺海底點選唔同嘅海洋生物，就可以解鎖圖鑑印章同聽語音介紹！</p>
+                </div>
+                <button id="btn-close-book" class="close-circle" type="button" aria-label="關閉圖鑑">✕</button>
+            </div>
+            <div id="book-grid" class="book-grid"></div>
+        </div>
+    </div>
 
-const speciesData = [
-    {
-        id: "clownfish", name: "小丑魚", en: "Clownfish", emoji: "🐠",
-        path: "assets/sprites/clownfish.png",
-        desc: "小丑魚同海葵一齊生活。佢身上有特別嘅黏液，所以唔會被海葵刺傷。",
-        size: 2.6, speed: 0.55, count: 5
-    },
-    {
-        id: "turtle", name: "綠海龜", en: "Green Sea Turtle", emoji: "🐢",
-        path: "assets/sprites/turtle.png",
-        desc: "海龜係海洋入面嘅長壽旅行者。千祈唔好亂丟膠袋，以免佢哋誤當食物食落肚。",
-        size: 3.6, speed: 0.35, count: 3
-    },
-    {
-        id: "shark", name: "雙髻鯊", en: "Hammerhead Shark", emoji: "🦈",
-        path: "assets/sprites/shark.png",
-        desc: "獨特嘅鎚子形頭部，幫佢哋擁有好廣闊嘅立體視野。",
-        size: 4.5, speed: 0.65, count: 2
-    },
-    {
-        id: "whale", name: "藍鯨", en: "Blue Whale", emoji: "🐋",
-        path: "assets/sprites/whale.png",
-        desc: "地球上體型最大嘅動物。雖然好大，但性格溫馴，主要以磷蝦為食。",
-        size: 6.5, speed: 0.25, count: 2
-    },
-    {
-        id: "bluefish", name: "藍魚", en: "Blue Fish", emoji: "🐟",
-        path: "assets/sprites/kenney_fish_blue.png",
-        desc: "色彩鮮艷嘅熱帶魚，喜歡成群喺珊瑚同海草附近游來游去。",
-        size: 2.2, speed: 0.6, count: 4
-    },
-    {
-        id: "pinkfish", name: "粉紅魚", en: "Pink Fish", emoji: "🐟",
-        path: "assets/sprites/kenney_fish_pink.png",
-        desc: "粉紅色嘅小魚好容易吸引同學注意。觀察魚群可以學習合作同方向。",
-        size: 2.2, speed: 0.58, count: 4
-    }
-];
-
-const interactables = [];
-const creatures = [];
-const _worldPos = new THREE.Vector3();
-const _camRight = new THREE.Vector3();
-const _prev = new THREE.Vector3();
-const shadowGeo = new THREE.CircleGeometry(0.55, 16);
-const shadowMat = new THREE.MeshBasicMaterial({
-    color: 0x000000, transparent: true, opacity: 0.16, depthWrite: false
-});
-
-function makeBillboard(tex, size) {
-    const mat = new THREE.MeshLambertMaterial({
-        map: tex, transparent: true, depthWrite: false, alphaTest: 0.08, side: THREE.DoubleSide
-    });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-    mesh.scale.set(size, size, 1);
-    return mesh;
-}
-
-function attachBlobShadow(group, size) {
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.scale.setScalar(Math.max(0.7, size * 0.35));
-    shadow.userData.kind = "shadow";
-    group.add(shadow);
-    return shadow;
-}
-
-speciesData.forEach((spec) => {
-    const tex = loadSmartTexture(spec.path, spec.emoji);
-    for (let i = 0; i < spec.count; i++) {
-        const group = new THREE.Group();
-        const mesh = makeBillboard(tex, spec.size);
-        group.add(mesh);
-
-        const radius = Math.random() * 22 + 5;
-        const angle = Math.random() * Math.PI * 2;
-        const baseY = Math.random() * 10 + 2.5;
-        group.position.set(Math.cos(angle) * radius, baseY, Math.sin(angle) * radius);
-
-        if (i === 0) {
-            const div = document.createElement("div");
-            div.className = "fish-label";
-            div.textContent = spec.name + "（" + spec.en + "）";
-            const label = new CSS2DObject(div);
-            label.position.set(0, 0.62, 0);
-            mesh.add(label);
-        }
-
-        const shadow = attachBlobShadow(group, spec.size);
-        group.userData = {
-            type: "creature", spec, mesh, shadow,
-            angle, radius, baseY,
-            speed: spec.speed * (Math.random() * 0.3 + 0.85),
-            bobOffset: Math.random() * 10,
-            prevX: group.position.x,
-            prevZ: group.position.z
-        };
-        mesh.userData = group.userData;
-        scene.add(group);
-        creatures.push(group);
-        interactables.push(mesh);
-    }
-});
-
-const seaweedFiles = [
-    "assets/sprites/seaweed_green_a.png",
-    "assets/sprites/seaweed_green_b.png",
-    "assets/sprites/seaweed_green_c.png",
-    "assets/sprites/seaweed_pink_a.png",
-    "assets/sprites/seaweed_pink_c.png",
-    "assets/sprites/seaweed_orange_a.png",
-    "assets/sprites/seaweed_grass_a.png"
-];
-const weeds = [];
-seaweedFiles.forEach((path, idx) => {
-    const tex = loadSmartTexture(path, "🌿");
-    for (let i = 0; i < 3; i++) {
-        const size = Math.random() * 2.2 + 2.4;
-        const mesh = makeBillboard(tex, size);
-        const angle = (idx * 3 + i) * 0.7 + Math.random();
-        const radius = Math.random() * 28 + 6;
-        const group = new THREE.Group();
-        group.add(mesh);
-        group.position.set(Math.cos(angle) * radius, size * 0.45, Math.sin(angle) * radius);
-        group.userData = { mesh, sway: Math.random() * 10, size };
-        scene.add(group);
-        weeds.push(group);
-    }
-});
-
-const trashTex = loadSmartTexture("assets/sprites/trash.png", "🥤");
-const trashList = [];
-function spawnTrash() {
-    const group = new THREE.Group();
-    const mesh = makeBillboard(trashTex, 2);
-    group.add(mesh);
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * 20 + 4;
-    group.position.set(Math.cos(a) * r, Math.random() * 8 + 2, Math.sin(a) * r);
-    const shadow = attachBlobShadow(group, 2);
-    group.userData = { type: "trash", mesh, shadow, bobOffset: Math.random() * 10, baseY: group.position.y };
-    mesh.userData = group.userData;
-    scene.add(group);
-    trashList.push(group);
-    interactables.push(mesh);
-}
-for (let i = 0; i < 5; i++) spawnTrash();
-
-const foods = [];
-const foodGeo = new THREE.SphereGeometry(0.25, 8, 8);
-const foodMat = new THREE.MeshLambertMaterial({ color: 0xffbe76 });
-function dropFood(point) {
-    const f = new THREE.Mesh(foodGeo, foodMat);
-    f.position.copy(point);
-    f.position.y = Math.max(point.y + 3, 5);
-    scene.add(f);
-    foods.push(f);
-}
-
-const bubbleCount = 80;
-const bubblePositions = new Float32Array(bubbleCount * 3);
-for (let i = 0; i < bubbleCount; i++) {
-    bubblePositions[i * 3] = (Math.random() - 0.5) * 50;
-    bubblePositions[i * 3 + 1] = Math.random() * 20;
-    bubblePositions[i * 3 + 2] = (Math.random() - 0.5) * 50;
-}
-const bubbleGeo = new THREE.BufferGeometry();
-bubbleGeo.setAttribute("position", new THREE.BufferAttribute(bubblePositions, 3));
-const bubbleSystem = new THREE.Points(
-    bubbleGeo,
-    new THREE.PointsMaterial({ color: 0xffffff, size: 0.35, transparent: true, opacity: 0.45, depthWrite: false })
-);
-scene.add(bubbleSystem);
-
-let mode = "explore";
-let score = 0;
-let currentWord = "";
-let downPos = { x: 0, y: 0 };
-const hint = document.getElementById("hint");
-
-document.getElementById("btn-explore").onclick = () => {
-    mode = "explore";
-    document.getElementById("btn-explore").classList.add("active");
-    document.getElementById("btn-feed").classList.remove("active");
-    hint.textContent = "拖曳轉動海底視角　｜　點一點認識海洋生物";
-};
-document.getElementById("btn-feed").onclick = () => {
-    mode = "feed";
-    document.getElementById("btn-feed").classList.add("active");
-    document.getElementById("btn-explore").classList.remove("active");
-    hint.textContent = "點海底投餵魚糧，睇吓魚會唔會游過嚟";
-};
-document.getElementById("btn-close").onclick = () => {
-    document.getElementById("info-card").style.display = "none";
-};
-document.getElementById("btn-speak").onclick = () => speak(currentWord);
-
-function speak(text) {
-    if ("speechSynthesis" in window && text) {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = "en-US";
-        u.rate = 0.88;
-        window.speechSynthesis.speak(u);
-    }
-}
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-window.addEventListener("pointerdown", (e) => {
-    downPos = { x: e.clientX, y: e.clientY };
-});
-
-window.addEventListener("pointerup", (e) => {
-    if (Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 6) return;
-    if (e.target.closest("#hud") || e.target.closest("#info-card")) return;
-
-    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(pointer, camera);
-
-    if (mode === "feed") {
-        const target = new THREE.Vector3();
-        raycaster.ray.at(18, target);
-        dropFood(target);
-        return;
-    }
-
-    const hits = raycaster.intersectObjects(interactables, false);
-    if (hits.length > 0) {
-        const obj = hits[0].object;
-        const data = obj.userData;
-        if (data.type === "creature") {
-            const s = data.spec;
-            document.getElementById("info-title").textContent = s.name;
-            document.getElementById("info-en").textContent = s.en;
-            document.getElementById("info-desc").textContent = s.desc;
-            currentWord = s.en;
-            document.getElementById("info-card").style.display = "block";
-            speak(s.en);
-        } else if (data.type === "trash") {
-            score += 1;
-            document.getElementById("score").textContent = String(score);
-            const group = obj.parent;
-            scene.remove(group);
-            interactables.splice(interactables.indexOf(obj), 1);
-            const ti = trashList.indexOf(group);
-            if (ti >= 0) trashList.splice(ti, 1);
-            setTimeout(spawnTrash, 4000);
-        }
-    }
-});
-
-function faceCameraYaw(obj) {
-    obj.getWorldPosition(_worldPos);
-    obj.rotation.set(0, Math.atan2(camera.position.x - _worldPos.x, camera.position.z - _worldPos.z), 0);
-}
-
-function updateShadow(group, shadow, size) {
-    if (!shadow) return;
-    shadow.position.set(0, 0.04 - group.position.y, 0);
-    const fade = THREE.MathUtils.clamp(1.1 - group.position.y / 16, 0.2, 0.9);
-    shadow.scale.setScalar(Math.max(0.5, size * 0.35 * fade));
-}
-
-const clock = new THREE.Clock();
-function animate() {
-    requestAnimationFrame(animate);
-    const t = clock.getElapsedTime();
-
-    causticsTex.offset.x = t * 0.03;
-    causticsTex.offset.y = t * 0.02;
-
-    for (let i = foods.length - 1; i >= 0; i--) {
-        foods[i].position.y -= 0.03;
-        if (foods[i].position.y < 0.3) {
-            scene.remove(foods[i]);
-            foods.splice(i, 1);
-        }
-    }
-
-    camera.getWorldDirection(_camRight);
-    _camRight.set(camera.matrixWorld.elements[0], 0, camera.matrixWorld.elements[8]).normalize();
-
-    creatures.forEach((c) => {
-        const d = c.userData;
-        _prev.copy(c.position);
-        if (foods.length > 0) {
-            const target = foods[0];
-            const dir = target.position.clone().sub(c.position);
-            if (dir.length() < 1.2) {
-                scene.remove(target);
-                foods.shift();
-            } else {
-                dir.normalize().multiplyScalar(0.1);
-                c.position.add(dir);
-            }
-            d.angle = Math.atan2(c.position.z, c.position.x);
-            d.radius = Math.hypot(c.position.x, c.position.z);
-            d.baseY = c.position.y;
-        } else {
-            d.angle += d.speed * 0.012;
-            c.position.x = Math.cos(d.angle) * d.radius;
-            c.position.z = Math.sin(d.angle) * d.radius;
-            c.position.y = d.baseY + Math.sin(t * 2 + d.bobOffset) * 0.5;
-        }
-
-        faceCameraYaw(d.mesh);
-        const vx = c.position.x - _prev.x;
-        const vz = c.position.z - _prev.z;
-        const side = Math.sign(vx * _camRight.x + vz * _camRight.z) || 1;
-        d.mesh.scale.x = side * d.spec.size;
-        d.mesh.rotation.z = Math.sin(t * 3 + d.bobOffset) * 0.08;
-        updateShadow(c, d.shadow, d.spec.size);
-    });
-
-    trashList.forEach((g) => {
-        const d = g.userData;
-        g.position.y = d.baseY + Math.sin(t * 1.6 + d.bobOffset) * 0.35;
-        faceCameraYaw(d.mesh);
-        updateShadow(g, d.shadow, 2);
-    });
-
-    weeds.forEach((g) => {
-        faceCameraYaw(g.userData.mesh);
-        g.userData.mesh.rotation.z = Math.sin(t * 1.4 + g.userData.sway) * 0.12;
-    });
-
-    const posArr = bubbleGeo.attributes.position.array;
-    for (let i = 0; i < bubbleCount; i++) {
-        posArr[i * 3 + 1] += 0.04;
-        if (posArr[i * 3 + 1] > 22) posArr[i * 3 + 1] = 0;
-    }
-    bubbleGeo.attributes.position.needsUpdate = true;
-
-    controls.update();
-    renderer.render(scene, camera);
-    labelRenderer.render(scene, camera);
-}
-animate();
-</script>
+    <script type="module" src="./src/main.js"></script>
 </body>
 </html>
